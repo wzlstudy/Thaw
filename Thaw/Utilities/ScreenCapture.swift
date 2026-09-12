@@ -116,9 +116,109 @@ nonisolated enum ScreenCapture {
     ///   - windowID: The identifier of the window to capture.
     ///   - screenBounds: The bounds to capture, specified in screen coordinates.
     ///     Pass `nil` to capture the minimum rectangle that encloses the window.
-    ///   - option: Options that specify which parts of the window are captured.
-    static func captureWindow(with windowID: CGWindowID, screenBounds: CGRect? = nil, option: CGWindowImageOption = []) -> CGImage? {
-        captureWindows(with: [windowID], screenBounds: screenBounds, option: option)
+    ///   - option: Options that specify which parts of the windows are captured.
+    static func captureWindow(with windowID: CGWindowID, screenBounds: CGRect? = nil, option: CGWindowImageOption = []) async -> CGImage? {
+        await captureWindows(with: [windowID], screenBounds: screenBounds, option: option)
+    }
+
+    /// Captures a rectangle of the composited screen via ScreenCaptureKit's
+    /// screen capture — the pixels as they appear on screen, not individual
+    /// window content.
+    ///
+    /// Region capture is the reliable path on pre-Tahoe systems: there,
+    /// ScreenCaptureKit's window filters stream transparent content for the
+    /// window server's menu bar window, the Dock's wallpaper window, and menu
+    /// bar item windows, and the SkyLight window-content path returns black —
+    /// while a screen capture of the same region returns exactly what the
+    /// user sees. Regions must lie within the display's bounds, so this
+    /// cannot serve content parked off-screen (the hidden menu bar sections).
+    ///
+    /// - Parameters:
+    ///   - screenBounds: The region to capture, in Core Graphics global
+    ///     display coordinates (top-left origin, as `CGWindowList` reports).
+    ///   - displayID: The display to capture from.
+    ///   - excludingWindowIDs: Windows to punch out of the capture, so a
+    ///     region can sample what sits behind them (the wallpaper palette
+    ///     excludes every on-screen window but the menu bar and wallpaper).
+    static func captureScreenRegion(
+        screenBounds: CGRect,
+        displayID: CGDirectDisplayID,
+        excludingWindowIDs: [CGWindowID] = []
+    ) async -> CGImage? {
+        do {
+            let content = try await getShareableContent()
+            guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+                diagLog.warning("captureScreenRegion: display \(displayID) not found")
+                return nil
+            }
+
+            let excludedWindows = content.windows.filter {
+                excludingWindowIDs.contains(CGWindowID($0.windowID))
+            }
+            let filter = if excludedWindows.isEmpty {
+                SCContentFilter(display: display, excludingWindows: [])
+            } else {
+                SCContentFilter(display: display, excludingWindows: excludedWindows)
+            }
+
+            let scale = Double(filter.pointPixelScale)
+            guard Bridging.isValidCaptureBounds(screenBounds, scale: CGFloat(scale)) else {
+                diagLog.warning("captureScreenRegion: refusing capture with invalid screenBounds=\(screenBounds) scale=\(scale) — see issue #759")
+                return nil
+            }
+
+            let displayFrame = display.frame
+            let localSourceRect = CGRect(
+                x: screenBounds.origin.x - displayFrame.origin.x,
+                y: screenBounds.origin.y - displayFrame.origin.y,
+                width: screenBounds.width,
+                height: screenBounds.height
+            )
+
+            let configuration = SCStreamConfiguration()
+            configuration.showsCursor = false
+            configuration.pixelFormat = kCVPixelFormatType_32BGRA
+            configuration.width = Int((screenBounds.width * scale).rounded())
+            configuration.height = Int((screenBounds.height * scale).rounded())
+            configuration.sourceRect = localSourceRect
+
+            let frameCaptor = FrameCaptor()
+            let stream = SCStream(filter: filter, configuration: configuration, delegate: frameCaptor)
+            try stream.addStreamOutput(frameCaptor, type: .screen, sampleHandlerQueue: FrameCaptor.sampleHandlerQueue)
+
+            try await stream.startCapture()
+            let image: CGImage?
+            do {
+                image = try await Task<CGImage?, any Error>.withTimeout(.seconds(5), tolerance: nil, clock: .continuous) {
+                    await frameCaptor.waitForFrame()
+                }
+                try? await stream.stopCapture()
+            } catch {
+                try? await stream.stopCapture()
+                throw error
+            }
+
+            #if DEBUG
+                await dumpCaptureForDebug(image, tag: "region-\(displayID)")
+            #endif
+            return image
+        } catch {
+            diagLog.warning("captureScreenRegion: failed for \(screenBounds) on display \(displayID): \(error)")
+            return nil
+        }
+    }
+
+    /// Resolves the display that owns the given global-coordinate rectangle,
+    /// or `nil` when the rectangle sits outside every display (parked menu
+    /// bar items, for example).
+    static func displayID(for bounds: CGRect) -> CGDirectDisplayID? {
+        var displayID = CGDirectDisplayID()
+        var count: UInt32 = 0
+        CGGetDisplaysWithRect(bounds, 1, &displayID, &count)
+        guard count > 0, displayID != 0 else {
+            return nil
+        }
+        return displayID
     }
 
     // MARK: Capture Window(s) via ScreenCaptureKit
@@ -129,6 +229,26 @@ nonisolated enum ScreenCapture {
     static func captureWindowsAsync(with windowIDs: [CGWindowID], screenBounds: CGRect? = nil, option: CGWindowImageOption = []) async -> CGImage? {
         await Bridging.captureWindowsImageSCK(windowIDs: windowIDs, screenBounds: screenBounds, options: option)
     }
+
+    #if DEBUG
+        /// Writes one capture to `/tmp/thaw-captures/` when the
+        /// `DumpCapturesForDebug` default is set, so capture content can be
+        /// inspected without a screen-recording view of the app.
+        static func dumpCaptureForDebug(_ image: CGImage?, tag: String) {
+            guard
+                UserDefaults.standard.bool(forKey: "DumpCapturesForDebug"),
+                let image
+            else { return }
+            try? FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: "/tmp/thaw-captures", isDirectory: true),
+                withIntermediateDirectories: true
+            )
+            let rep = NSBitmapImageRep(cgImage: image)
+            guard let png = rep.representation(using: .png, properties: [:]) else { return }
+            let stamp = Int(Date.timeIntervalSinceReferenceDate * 1000) % 1_000_000
+            try? png.write(to: URL(fileURLWithPath: "/tmp/thaw-captures/\(stamp)-\(tag).png"))
+        }
+    #endif
 
     /// Async, ScreenCaptureKit-backed equivalent of captureWindow.
     static func captureWindowAsync(with windowID: CGWindowID, screenBounds: CGRect? = nil, option: CGWindowImageOption = []) async -> CGImage? {
@@ -281,8 +401,23 @@ nonisolated enum ScreenCapture {
     /// would therefore never fire, so there is none: the call simply runs to
     /// completion and its result is cached.
     private static func fetchShareableContentUncached() async throws -> ShareableContentSnapshot {
-        let content = try await SCShareableContent.current
-        return ShareableContentSnapshot(content: content)
+        // `SCShareableContent.current` is a nonisolated SDK API whose
+        // non-Sendable result cannot cross into an isolated context, so the
+        // fetch runs detached on the global executor and only the boxed
+        // result travels back.
+        let box = try await Task.detached { () -> ShareableContentBox in
+            ShareableContentBox(content: try await SCShareableContent.current)
+        }.value
+        return ShareableContentSnapshot(content: box.content)
+    }
+
+    /// A sendable bridge for one fetched `SCShareableContent` value.
+    private final class ShareableContentBox: @unchecked Sendable {
+        let content: SCShareableContent
+
+        init(content: SCShareableContent) {
+            self.content = content
+        }
     }
 }
 

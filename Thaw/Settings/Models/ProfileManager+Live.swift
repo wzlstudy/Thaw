@@ -6,6 +6,7 @@
 //  Copyright (Thaw) © 2026 Toni Förster
 //  Licensed under the GNU GPLv3
 
+import AppIntents
 import Cocoa
 
 /// The live half of ``ProfileManager``: everything whose substance needs a

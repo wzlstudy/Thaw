@@ -256,7 +256,13 @@ extension MenuBarCaptureService {
                     }
                 }
                 if CodeSigningInfo.processTeamIdentifier != nil {
-                    session.setPeerRequirement(.isFromSameTeam())
+                    if #available(macOS 26.0, *) {
+                        session.setPeerRequirement(.isFromSameTeam())
+                    } else {
+                        // `setPeerRequirement` arrived with macOS 26; the
+                        // service is confined to this app's bundle anyway.
+                        diagLog.notice("getSession: pre-macOS-26 system, skipping peer requirement")
+                    }
                 }
                 session.setTargetQueue(queue)
                 try session.activate()

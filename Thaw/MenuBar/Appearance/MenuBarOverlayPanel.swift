@@ -691,22 +691,15 @@ private final class MenuBarOverlayPanelContentView: NSView {
         isDraggingMenuBarItemObservationTask?.cancel()
     }
 
-    private lazy var tintGlassView: NSGlassEffectView = {
-        let view = NSGlassEffectView()
+    private lazy var tintGlassView: ThawGlassEffectView = {
+        let view = ThawGlassEffectView()
         view.style = .regular
         view.cornerRadius = 0
-        view.translatesAutoresizingMaskIntoConstraints = false
         view.wantsLayer = true
         let content = NSView()
         content.translatesAutoresizingMaskIntoConstraints = false
         content.wantsLayer = true
         view.contentView = content
-        NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: view.topAnchor),
-            content.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            content.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
         return view
     }()
 
@@ -1360,16 +1353,15 @@ private final class MenuBarOverlayPanelContentView: NSView {
 
     private var isBackgroundGlassActive = false
 
+    /// The glass backing view installed while the background kind is glass.
+    private var backgroundGlassView: ThawGlassEffectView?
+
     /// Adds or removes the glass container on the panel based on background kind.
     private func updateBackgroundGlass() {
         guard let panel = window as? MenuBarOverlayPanel else { return }
         if configuration.backgroundKind == .glass {
             if isBackgroundGlassActive {
-                if let glassView = panel.contentView?.subviews
-                    .compactMap({ $0 as? NSGlassEffectView }).first
-                {
-                    glassView.style = configuration.backgroundGlassStyle.nsGlassStyle
-                }
+                backgroundGlassView?.style = configuration.backgroundGlassStyle.thawGlassStyle
                 return
             }
             guard let realContent = panel.contentView else { return }
@@ -1378,10 +1370,10 @@ private final class MenuBarOverlayPanelContentView: NSView {
             let container = NSView()
             container.wantsLayer = true
 
-            let glassView = NSGlassEffectView()
-            glassView.style = configuration.backgroundGlassStyle.nsGlassStyle
+            let glassView = ThawGlassEffectView()
+            glassView.style = configuration.backgroundGlassStyle.thawGlassStyle
             glassView.cornerRadius = 0
-            glassView.translatesAutoresizingMaskIntoConstraints = false
+            backgroundGlassView = glassView
 
             realContent.removeFromSuperview()
             realContent.translatesAutoresizingMaskIntoConstraints = false
@@ -1403,6 +1395,7 @@ private final class MenuBarOverlayPanelContentView: NSView {
             ])
         } else if isBackgroundGlassActive {
             isBackgroundGlassActive = false
+            backgroundGlassView = nil
             guard let container = panel.contentView,
                   let realContent = container.subviews
                   .compactMap({ $0 as? MenuBarOverlayPanelContentView }).first
@@ -1429,7 +1422,7 @@ private final class MenuBarOverlayPanelContentView: NSView {
             }
             tintGlassMaskLayer.path = shapeCGPath
             tintGlassContentMaskLayer.path = shapeCGPath
-            tintGlassView.style = configuration.tintGlassStyle.nsGlassStyle
+            tintGlassView.style = configuration.tintGlassStyle.thawGlassStyle
 
             if configuration.borderOnMenuBar {
                 tintGlassBorderLayer.path = shapeCGPath

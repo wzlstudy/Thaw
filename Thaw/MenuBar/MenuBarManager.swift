@@ -7,6 +7,7 @@
 //  Licensed under the GNU GPLv3
 
 import AsyncAlgorithms
+import AXSwift6
 import Combine
 import Observation
 import SwiftUI
@@ -790,7 +791,7 @@ final class MenuBarManager {
 
         // Resolve per-screen capture inputs synchronously on MainActor before
         // fanning out; the SCK calls themselves are the only async work.
-        var inputs = [(displayID: CGDirectDisplayID, windowIDs: [CGWindowID], bounds: CGRect, fullBounds: CGRect)]()
+        var inputs = [(displayID: CGDirectDisplayID, windowIDs: [CGWindowID], bounds: CGRect, fullBounds: CGRect, paletteExclusions: [CGWindowID])]()
         for screen in targetScreens {
             let displayID = screen.displayID
             guard
@@ -801,7 +802,12 @@ final class MenuBarManager {
             }
             let windowIDs = [menuBarWindow.windowID, wallpaperWindow.windowID]
             let bounds = withMutableCopy(of: wallpaperWindow.bounds) { $0.size.height = 1 }
-            inputs.append((displayID, windowIDs, bounds, wallpaperWindow.bounds))
+            // The palette samples the wallpaper itself, so every other
+            // on-screen window is punched out of that capture.
+            let paletteExclusions = windows
+                .map(\.windowID)
+                .filter { !windowIDs.contains($0) }
+            inputs.append((displayID, windowIDs, bounds, wallpaperWindow.bounds, paletteExclusions))
         }
 
         // Only pay for the second, full-height capture when something
@@ -818,11 +824,14 @@ final class MenuBarManager {
         await withTaskGroup(of: (CGDirectDisplayID, MenuBarAverageColorInfo, WallpaperPalette?)?.self) { group in
             for input in inputs {
                 group.addTask {
+                    // Region capture: the menu bar and wallpaper windows'
+                    // CONTENT comes back transparent (ScreenCaptureKit) or
+                    // black (SkyLight) on pre-Tahoe systems, but the
+                    // composited screen pixels in the same strip are correct.
                     guard
-                        let image = await ScreenCapture.captureWindowsAsync(
-                            with: input.windowIDs,
+                        let image = await ScreenCapture.captureScreenRegion(
                             screenBounds: input.bounds,
-                            option: .nominalResolution
+                            displayID: input.displayID
                         ),
                         let color = image.averageColor(option: .ignoreAlpha)
                     else {
@@ -834,11 +843,12 @@ final class MenuBarManager {
                         // The strip above is one pixel tall by design, which
                         // is enough to average and far too little to derive a
                         // scheme from, so the palette re-captures at the
-                        // wallpaper's real height.
-                        palette = await ScreenCapture.captureWindowsAsync(
-                            with: input.windowIDs,
+                        // wallpaper's real height, with every other on-screen
+                        // window punched out.
+                        palette = await ScreenCapture.captureScreenRegion(
                             screenBounds: input.fullBounds,
-                            option: .nominalResolution
+                            displayID: input.displayID,
+                            excludingWindowIDs: input.paletteExclusions
                         )?.dominantColors()
                     }
 

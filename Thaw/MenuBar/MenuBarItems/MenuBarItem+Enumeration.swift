@@ -199,7 +199,6 @@ nonisolated extension MenuBarItem {
         }
     }
 
-    @available(macOS 26.0, *)
     @MainActor
     private static func makeItemsWithoutResolvingSourcePID(
         from windows: [WindowInfo]
@@ -239,7 +238,6 @@ nonisolated extension MenuBarItem {
         )
     }
 
-    @available(macOS 26.0, *)
     @MainActor
     private static func getMenuBarItemsExperimental(
         on display: CGDirectDisplayID?,

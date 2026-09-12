@@ -42,10 +42,9 @@ final class CustomTooltipPanel: NSPanel {
         return field
     }()
 
-    private let glassView: NSGlassEffectView = {
-        let view = NSGlassEffectView()
+    private let glassView: ThawGlassEffectView = {
+        let view = ThawGlassEffectView()
         view.cornerRadius = 4
-        view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
 

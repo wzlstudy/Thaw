@@ -213,10 +213,12 @@ final class IceBarColorManager {
         windowImageGeneration += 1
         let generation = windowImageGeneration
 
-        let image = await ScreenCapture.captureWindowsAsync(
-            with: windowIDs,
+        // Region capture: window-content captures come back transparent
+        // (ScreenCaptureKit) or black (SkyLight) for these windows on
+        // pre-Tahoe systems, while the composited screen pixels are correct.
+        let image = await ScreenCapture.captureScreenRegion(
             screenBounds: bounds,
-            option: .nominalResolution
+            displayID: displayID
         )
         guard generation == windowImageGeneration, let image else { return }
         windowImage = image

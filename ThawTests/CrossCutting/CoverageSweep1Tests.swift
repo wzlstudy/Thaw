@@ -127,15 +127,15 @@ struct CoverageSweep1Tests {
     @MainActor
     @Suite("MenuBarGlassStyle")
     struct GlassStyleTests {
-        @Test("Each style maps to the matching AppKit glass style")
-        func nsGlassStyleMapping() {
-            #expect(MenuBarGlassStyle.regular.nsGlassStyle == NSGlassEffectView.Style.regular)
-            #expect(MenuBarGlassStyle.clear.nsGlassStyle == NSGlassEffectView.Style.clear)
+        @Test("Each style maps to the matching compatibility glass style")
+        func thawGlassStyleMapping() {
+            #expect(MenuBarGlassStyle.regular.thawGlassStyle == .regular)
+            #expect(MenuBarGlassStyle.clear.thawGlassStyle == .clear)
         }
 
-        @Test("The two styles do not collapse onto one AppKit style")
-        func nsGlassStyleMappingIsInjective() {
-            #expect(MenuBarGlassStyle.regular.nsGlassStyle != MenuBarGlassStyle.clear.nsGlassStyle)
+        @Test("The two styles do not collapse onto one compatibility style")
+        func thawGlassStyleMappingIsInjective() {
+            #expect(MenuBarGlassStyle.regular.thawGlassStyle != MenuBarGlassStyle.clear.thawGlassStyle)
         }
 
         @Test("Each style has its own label")

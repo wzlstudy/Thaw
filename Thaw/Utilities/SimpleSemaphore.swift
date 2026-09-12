@@ -7,6 +7,7 @@
 //  Licensed under the GNU GPLv3
 
 import Collections
+import DequeModule
 import Foundation
 
 /// Simple actor-based semaphore to prevent overlapping operations

@@ -8,6 +8,7 @@
 
 import AppKit
 import Collections
+import Combine
 import Foundation
 
 /// The live half of ``MenuBarItemTriggersManager``: everything whose substance
@@ -789,8 +790,10 @@ extension MenuBarItemTriggersManager {
             return nil
         }
 
-        return await ScreenCapture.captureWindowAsync(with: item.windowID)
-            ?? ScreenCapture.captureWindow(with: item.windowID)
+        if let image = await ScreenCapture.captureWindowAsync(with: item.windowID) {
+            return image
+        }
+        return await ScreenCapture.captureWindow(with: item.windowID)
     }
 
     /// Captures both the runtime hash and a compact settings preview.

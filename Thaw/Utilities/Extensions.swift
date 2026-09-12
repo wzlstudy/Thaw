@@ -6,6 +6,7 @@
 //  Copyright (Thaw) © 2026 Toni Förster
 //  Licensed under the GNU GPLv3
 
+import AXSwift6
 import Combine
 import os.lock
 import SwiftUI

@@ -10,6 +10,7 @@ import Algorithms
 import Cocoa
 import Collections
 import Combine
+import DequeModule
 
 // @preconcurrency retained: CoreGraphics event types (CGEventSource/CGEvent) are
 // still not Sendable-annotated in the macOS 26/27 SDK, yet are used off the main

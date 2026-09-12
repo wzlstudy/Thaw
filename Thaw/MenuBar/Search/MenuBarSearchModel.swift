@@ -91,14 +91,15 @@ final class MenuBarSearchModel {
         let windows = WindowInfo.createWindows(option: .onScreen)
         let displayID = screen.displayID
 
+        // The menu bar window check keeps the same guard semantics as the
+        // other color samplers; only the wallpaper window's bounds are used.
         guard
-            let menuBarWindow = WindowInfo.menuBarWindow(from: windows, for: displayID),
+            WindowInfo.menuBarWindow(from: windows, for: displayID) != nil,
             let wallpaperWindow = WindowInfo.wallpaperWindow(from: windows, for: displayID)
         else {
             return
         }
 
-        let windowIDs = [menuBarWindow.windowID, wallpaperWindow.windowID]
         let bounds = withMutableCopy(of: wallpaperWindow.bounds) { $0.size.height = 1 }
 
         // Stamp our generation before suspending. If clearAverageColorInfo or
@@ -110,10 +111,9 @@ final class MenuBarSearchModel {
 
         Task { [weak self] in
             guard
-                let image = await ScreenCapture.captureWindowsAsync(
-                    with: windowIDs,
+                let image = await ScreenCapture.captureScreenRegion(
                     screenBounds: bounds,
-                    option: .nominalResolution
+                    displayID: displayID
                 ),
                 let color = image.averageColor(option: .ignoreAlpha)
             else {

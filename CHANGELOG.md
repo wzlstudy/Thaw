@@ -7,6 +7,18 @@ The `release.yml` workflow reads the section matching the release tag
 (`## [tag]`) and uses it as the release notes for both the GitHub Release
 and the Sparkle appcast, unless overridden with the `release_notes` input.
 
+## [Unreleased]
+
+### Local build changes
+
+- Automatic update checks default to off (`SUEnableAutomaticChecks` is `false`); the toggle in settings still works.
+
+### macOS 15 compatibility
+
+- The deployment target drops from macOS 26 to macOS 15 for every target.
+- The macOS 26 "Liquid Glass" APIs gained pre-macOS-26 fallbacks: `Observations` is provided by a module-level polyfill built on `withObservationTracking`, AppKit glass views are wrapped by ``ThawGlassEffectView`` (an `NSGlassEffectView` on macOS 26, vibrancy below), and SwiftUI's `glassEffect`, glass button styles, `GlassEffectContainer`, `safeAreaBar`, and `scrollEdgeEffectStyle` route through compatibility helpers that fall back to standard materials and `safeAreaInset`.
+- XPC peer validation (`setPeerRequirement` / listener requirement) is applied only on macOS 26 and later, where the API exists; the requirement check is skipped on older systems.
+
 ## [3.0.0-alpha.2] - 2026-09-10
 
 We reenable the cursor free method, reorders now land the moment you drop an item, and the cursor stays yours. Plus, a fix for layouts saved on macOS 26 being discarded on 27.

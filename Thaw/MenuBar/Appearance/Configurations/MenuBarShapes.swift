@@ -163,7 +163,7 @@ nonisolated enum MenuBarGlassStyle: Int, CaseIterable, Codable, Hashable {
     /// Clear glass effect.
     case clear = 1
 
-    var nsGlassStyle: NSGlassEffectView.Style {
+    var thawGlassStyle: ThawGlassStyle {
         switch self {
         case .regular: .regular
         case .clear: .clear

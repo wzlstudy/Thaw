@@ -66,7 +66,7 @@
 - **Switch layouts by context**: bind a profile to a display, to a Space, or to a Focus filter
 - **Zen mode**: one action conceals every section and locks the reveal gestures, then puts it all back. It can engage on its own while you present or share your screen
 - **Style the bar**: tint, gradient, shadow, border, and custom shapes, per light/dark mode and per Space
-- **Built for modern macOS**: supports macOS 26 and 27, including notch-friendly layouts via the Thaw Bar
+- **Built for modern macOS**: supports macOS 15 and later, including notch-friendly layouts via the Thaw Bar
 
 <details>
 <summary><b>Full feature list</b>: 40+ more, including groups, spacers, profiles, triggers, and hotkeys</summary>
@@ -202,7 +202,7 @@ brew install thaw@beta   # beta, or stable if it is newer
 
 Or grab the `.dmg` from the [latest release](https://github.com/thaw-app/Thaw/releases/latest) and drag Thaw to Applications.
 
-Needs macOS 26+. Thaw asks for Accessibility on first launch to move menu bar items; Screen Recording is optional. Stuck? See [Frequent issues](FREQUENT_ISSUES.md).
+Needs macOS 15+. Thaw asks for Accessibility on first launch to move menu bar items; Screen Recording is optional. Stuck? See [Frequent issues](FREQUENT_ISSUES.md).
 
 ## Languages
 

@@ -104,11 +104,12 @@ final nonisolated class Listener: @unchecked Sendable {
 
     /// Activates the listener.
     ///
-    /// Session peers must be signed with the same team identifier as the
-    /// service process. Builds signed without a team identifier
-    /// (ad-hoc/personal builds) activate without a peer requirement, since
-    /// `.isFromSameTeam()` can never be satisfied there and every session
-    /// would be cancelled before the first message.
+    /// On macOS 26 and later, session peers must be signed with the same
+    /// team identifier as the service process. Earlier systems have no
+    /// requirement API in the XPC framework, and builds signed without a
+    /// team identifier (ad-hoc/personal builds) activate without a peer
+    /// requirement, since `.isFromSameTeam()` can never be satisfied there
+    /// and every session would be cancelled before the first message.
     func activate() {
         guard xpcListener == nil else {
             diagLog.notice("Listener is already active")
@@ -124,8 +125,14 @@ final nonisolated class Listener: @unchecked Sendable {
                 diagLog.warning(
                     "Listener is active WITHOUT peer validation (ad-hoc/teamless build): any local process may connect"
                 )
-            } else {
+            } else if #available(macOS 26.0, *) {
                 xpcListener = try XPCListener(service: name, requirement: .isFromSameTeam()) { self.acceptSession($0) }
+            } else {
+                diagLog.notice("Listener: pre-macOS-26 system, activating without peer requirement")
+                xpcListener = try XPCListener(service: name) { self.acceptSession($0) }
+                diagLog.warning(
+                    "Listener is active WITHOUT peer validation (pre-macOS-26 system): any local process may connect"
+                )
             }
         } catch {
             diagLog.error("Failed to activate listener with error \(error)")

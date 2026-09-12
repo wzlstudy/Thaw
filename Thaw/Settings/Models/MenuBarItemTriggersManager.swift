@@ -10,6 +10,8 @@ import AppKit
 import Collections
 import Combine
 import Foundation
+import OrderedCollections
+import SwiftUI
 
 /// Runtime status for a trigger's condition evaluation and item-move pipeline.
 enum MenuBarItemTriggerRuntimeStatus: Equatable {

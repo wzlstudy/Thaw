@@ -11,6 +11,7 @@ import Cocoa
 import Collections
 import Combine
 import Observation
+import OrderedCollections
 import os.lock
 
 /// Cache for menu bar item images.
@@ -1059,10 +1060,31 @@ final class MenuBarItemImageCache: @unchecked Sendable {
             return result
         }
 
-        let compositeImage = await ScreenCapture.captureWindowsAsync(
-            with: windowIDs,
-            option: captureOption
-        )
+        // Pre-Tahoe: window-content streams come back transparent for these
+        // windows, so capture the composited screen region instead. Sections
+        // parked off-screen (the hidden sections' items sit far outside the
+        // display) resolve no display here and fall through as excluded —
+        // those items render as their app icons, matching the documented
+        // no-preview behavior.
+        let compositeImage: CGImage?
+        if #unavailable(macOS 26.0) {
+            guard let displayID = ScreenCapture.displayID(for: boundsUnion) else {
+                MenuBarItemImageCache.diagLog.debug(
+                    "compositeCapture: union bounds off-screen (\(windowIDs.count) windows), excluding"
+                )
+                result.excluded = itemsWithBounds.map(\.item)
+                return result
+            }
+            compositeImage = await ScreenCapture.captureScreenRegion(
+                screenBounds: boundsUnion,
+                displayID: displayID
+            )
+        } else {
+            compositeImage = await ScreenCapture.captureWindowsAsync(
+                with: windowIDs,
+                option: captureOption
+            )
+        }
 
         guard let compositeImage else {
             MenuBarItemImageCache.diagLog.warning("compositeCapture: ScreenCapture.captureWindows returned nil for \(windowIDs.count) windows")
@@ -1405,7 +1427,17 @@ final class MenuBarItemImageCache: @unchecked Sendable {
         scale: CGFloat,
         viaSCK: Bool = false
     ) async {
+        // ScreenCaptureKit streams fully transparent content for menu bar item
+        // windows on pre-Tahoe systems (the item windows are composited by the
+        // window server and cannot be streamed), so below macOS 26 the visible
+        // section takes the SkyLight capture-service path too. The service
+        // exits after a capture budget, which reclaims the SkyLight path's
+        // small per-call leak.
         if !viaSCK {
+            await refreshImagesFromCaptureService(items: items, scale: scale)
+            return
+        }
+        if #unavailable(macOS 26.0) {
             await refreshImagesFromCaptureService(items: items, scale: scale)
             return
         }
@@ -1449,10 +1481,26 @@ final class MenuBarItemImageCache: @unchecked Sendable {
 
         // Capture path: SCK is leak-free but display-bounded, so only use it
         // when the caller knows all items are on-screen (visible section).
-        let compositeImage = await ScreenCapture.captureWindowsAsync(
-            with: windowIDs,
-            option: captureOption
-        )
+        // Pre-Tahoe, window-content streams come back transparent for these
+        // windows, so the visible section samples the composited screen
+        // region instead — the union is on-screen, which is exactly what
+        // region capture requires.
+        let compositeImage: CGImage?
+        if #unavailable(macOS 26.0) {
+            guard let displayID = ScreenCapture.displayID(for: boundsUnion) else {
+                MenuBarItemImageCache.diagLog.debug("refreshImages: union bounds off-screen, skipping")
+                return
+            }
+            compositeImage = await ScreenCapture.captureScreenRegion(
+                screenBounds: boundsUnion,
+                displayID: displayID
+            )
+        } else {
+            compositeImage = await ScreenCapture.captureWindowsAsync(
+                with: windowIDs,
+                option: captureOption
+            )
+        }
         guard let compositeImage else {
             MenuBarItemImageCache.diagLog.debug("refreshImages: capture failed, skipping")
             return

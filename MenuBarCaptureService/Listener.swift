@@ -199,6 +199,7 @@ final nonisolated class Listener: @unchecked Sendable {
         }
     }
 
+    @available(macOS 26.0, *)
     private func uncheckedActivateWithSameTeamRequirement() throws {
         xpcListener = try XPCListener(service: name, requirement: .isFromSameTeam()) { request in
             request.accept { [self] message in
@@ -226,8 +227,13 @@ final nonisolated class Listener: @unchecked Sendable {
         do {
             if CodeSigningInfo.processTeamIdentifier == nil {
                 try uncheckedActivateWithoutPeerRequirement()
-            } else {
+            } else if #available(macOS 26.0, *) {
                 try uncheckedActivateWithSameTeamRequirement()
+            } else {
+                // The peer-requirement API arrived with macOS 26; the service
+                // is confined to this app's bundle anyway.
+                diagLog.notice("Capture listener: pre-macOS-26 system, activating without peer requirement")
+                try uncheckedActivateWithoutPeerRequirement()
             }
         } catch {
             diagLog.error("Failed to activate capture listener with error \(error)")

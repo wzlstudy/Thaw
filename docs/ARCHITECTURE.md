@@ -15,7 +15,7 @@ profiles, and customizes menu bar appearance. It is a maintained fork of
 - Prefer local-only operation: no accounts, no telemetry/tracking backend.
 - Fail closed for privileged automation surfaces (`thaw://` settings APIs).
 - Stay compatible with current macOS releases. The deployment target is macOS
-  26; macOS 27 support is tracked in
+  15; macOS 27 support is tracked in
   [#687](https://github.com/thaw-app/Thaw/issues/687).
 
 ## Repository layout

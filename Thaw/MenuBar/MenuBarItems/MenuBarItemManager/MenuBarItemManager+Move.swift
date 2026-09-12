@@ -301,17 +301,32 @@ extension MenuBarItemManager {
         return crosses ? .crossesNotch : .sameSafeSegment
     }
 
+    /// Whether the running system predates macOS 26 and therefore needs the
+    /// faithful-drag transport for every synthetic move (see
+    /// ``strictTransportDecision(faithfulDragEnabled:itemIsControlItem:sourceDisplayID:destinationDisplayID:selectedDisplayID:horizontalPath:usesPreTahoeTransport:)``).
+    private static let usesPreTahoeTransport = !ProcessInfo.processInfo.isOperatingSystemAtLeast(
+        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+    )
+
     /// Selects a transport from explicit display membership and path safety.
     /// A `nil` endpoint display means WindowServer has parked it off-screen;
     /// a non-selected display means the plan is stale or cross-display and is
     /// rejected instead of being teleported.
+    ///
+    /// On pre-Tahoe systems every surviving path rides a faithful drag: the
+    /// teleport transports stamp their mouse-down at the destination and rely
+    /// on the event's window override to reach the item, which AppKit's menu
+    /// bar reordering ignores there, so the item never moves and the verdict
+    /// comes back stale. A faithful drag presses on the item itself, which
+    /// every macOS version honors.
     static nonisolated func strictTransportDecision(
         faithfulDragEnabled: Bool,
         itemIsControlItem: Bool,
         sourceDisplayID: CGDirectDisplayID?,
         destinationDisplayID: CGDirectDisplayID?,
         selectedDisplayID: CGDirectDisplayID,
-        horizontalPath: HorizontalPathDisposition
+        horizontalPath: HorizontalPathDisposition,
+        usesPreTahoeTransport: Bool = false
     ) -> MoveTransportDecision {
         if let sourceDisplayID, sourceDisplayID != selectedDisplayID {
             return .rejectUnsafePath
@@ -320,15 +335,19 @@ extension MenuBarItemManager {
             return .rejectUnsafePath
         }
         if sourceDisplayID == nil || destinationDisplayID == nil {
-            return .use(.parkedTeleport)
+            return .use(usesPreTahoeTransport ? .faithfulDrag : .parkedTeleport)
         }
         return switch horizontalPath {
         case .invalidEndpoint:
             .rejectUnsafePath
         case .crossesNotch:
-            .use(.crossNotchTeleport)
+            .use(usesPreTahoeTransport ? .faithfulDrag : .crossNotchTeleport)
         case .sameSafeSegment:
-            .use(faithfulDragEnabled && !itemIsControlItem ? .faithfulDrag : .teleport)
+            if usesPreTahoeTransport {
+                .use(.faithfulDrag)
+            } else {
+                .use(faithfulDragEnabled && !itemIsControlItem ? .faithfulDrag : .teleport)
+            }
         }
     }
 
@@ -911,7 +930,8 @@ extension MenuBarItemManager {
         itemBounds: CGRect,
         targetPoint: CGPoint,
         geometry: (source: MoveEndpointDisposition, target: MoveEndpointDisposition),
-        on displayID: CGDirectDisplayID
+        on displayID: CGDirectDisplayID,
+        usesPreTahoeTransport: Bool
     ) -> MoveTransportDecision {
         let displayBounds = CGDisplayBounds(displayID)
         let screen = NSScreen.screens.first { $0.displayID == displayID }
@@ -930,7 +950,8 @@ extension MenuBarItemManager {
             sourceDisplayID: geometry.source == .selectedDisplay ? displayID : nil,
             destinationDisplayID: geometry.target == .selectedDisplay ? displayID : nil,
             selectedDisplayID: displayID,
-            horizontalPath: path
+            horizontalPath: path,
+            usesPreTahoeTransport: usesPreTahoeTransport
         )
     }
 
@@ -1131,7 +1152,8 @@ extension MenuBarItemManager {
             itemBounds: initialEndpoints.source.bounds,
             targetPoint: initialTargetPoints.end,
             geometry: initialGeometry,
-            on: displayID
+            on: displayID,
+            usesPreTahoeTransport: Self.usesPreTahoeTransport
         ) {
         case let .use(selected):
             initialStrategy = selected
@@ -1234,7 +1256,8 @@ extension MenuBarItemManager {
             itemBounds: itemBounds,
             targetPoint: targetPoints.end,
             geometry: geometry,
-            on: displayID
+            on: displayID,
+            usesPreTahoeTransport: Self.usesPreTahoeTransport
         ) {
         case let .use(selected):
             strategy = selected
